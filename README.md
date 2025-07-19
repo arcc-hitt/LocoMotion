@@ -223,12 +223,12 @@ The application is built with testability in mind:
 - **Type Safety**: TypeScript prevents runtime errors
 - **Error Boundaries**: Graceful error handling
 
-## 🚀 Performance Metrics
+<!-- ## 🚀 Performance Metrics
 
 - **Bundle Size**: Optimized with tree shaking and code splitting
 - **Render Performance**: Memoized components prevent unnecessary re-renders
 - **Memory Usage**: Efficient state management and cleanup
-- **Network Requests**: Optimized API calls with proper caching
+- **Network Requests**: Optimized API calls with proper caching -->
 
 ## 🤝 Contributing
 
