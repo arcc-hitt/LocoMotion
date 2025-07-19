@@ -1,65 +1,91 @@
-import { MapContainer, TileLayer, Polyline, Marker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Polyline, Marker } from 'react-leaflet'
 import L, { type LatLngExpression } from 'leaflet'
 import type { RoutePoint } from '../types'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef } from 'react'
-import { FaCarSide } from "react-icons/fa6"
-import ReactDOMServer from 'react-dom/server'
+import { useRef, useMemo } from 'react'
+import { useMapCenter, useMarkerPosition, useVehicleIcon } from '../hooks'
 
-interface Props {
+// Constants
+const MAP_CONFIG = {
+  ZOOM: 15,
+  POLYLINE_COLOR: '#3b82f6',
+  POLYLINE_WEIGHT: 4,
+  POLYLINE_OPACITY: 0.8,
+  POLYLINE_SMOOTH_FACTOR: 1,
+  VEHICLE_ICON_SIZE: 32,
+  VEHICLE_Z_INDEX: 1000,
+} as const
+
+const TILE_LAYER_CONFIG = {
+  URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  ATTRIBUTION: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+} as const
+
+interface MapViewProps {
   route: RoutePoint[]
   currentIndex: number
+  centerOnVehicle?: boolean
+  showRoute?: boolean
+  showVehicle?: boolean
 }
 
-const MapView = ({ route, currentIndex }: Props) => {
+// Map center updater component
+const MapCenterUpdater: React.FC<{ center: LatLngExpression | null; enabled: boolean }> = ({ 
+  center, 
+  enabled 
+}) => {
+  return useMapCenter(center, enabled)
+}
+
+// Marker updater component
+const MarkerUpdater: React.FC<{ 
+  markerRef: React.RefObject<L.Marker | null>
+  position: LatLngExpression | null 
+}> = ({ markerRef, position }) => {
+  useMarkerPosition(markerRef, position)
+  return null
+}
+
+const MapView: React.FC<MapViewProps> = ({ 
+  route, 
+  currentIndex, 
+  centerOnVehicle = true,
+  showRoute = true,
+  showVehicle = true
+}) => {
   const markerRef = useRef<L.Marker | null>(null)
   const polylineRef = useRef<L.Polyline | null>(null)
+  const vehicleIcon = useVehicleIcon()
 
-  const currentPos: LatLngExpression | null =
-    route[currentIndex]
-      ? [route[currentIndex].latitude, route[currentIndex].longitude]
+  // Memoize current position
+  const currentPos = useMemo((): LatLngExpression | null => {
+    const currentPoint = route[currentIndex]
+    return currentPoint 
+      ? [currentPoint.latitude, currentPoint.longitude]
       : null
+  }, [route, currentIndex])
 
-  // Center map on current position with smooth animation
-  const CenterUpdater = () => {
-    const map = useMap()
-    useEffect(() => {
-      if (currentPos) map.setView(currentPos, map.getZoom(), { animate: true })
-    }, [currentPos, map])
-    return null
-  }
+  // Memoize map center
+  const mapCenter = useMemo((): LatLngExpression => {
+    return currentPos ?? [route[0]?.latitude || 0, route[0]?.longitude || 0]
+  }, [currentPos, route])
 
-  // Smooth marker animation
-  const MarkerUpdater = () => {
-    useEffect(() => {
-      if (currentPos && markerRef.current) {
-        markerRef.current.setLatLng(currentPos)
-      }
-    }, [currentPos])
-    return null
-  }
+  // Memoize polyline positions
+  const polylinePositions = useMemo((): LatLngExpression[] => {
+    if (!showRoute || route.length === 0) return []
+    
+    return route
+      .slice(0, currentIndex + 1)
+      .map((pt) => [pt.latitude, pt.longitude] as LatLngExpression)
+  }, [route, currentIndex, showRoute])
 
-  // Create custom vehicle icon
-  const carHtml = ReactDOMServer.renderToString(
-    <div className="relative">
-      <FaCarSide size={32} className="text-blue-600 drop-shadow-lg" />
-      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-    </div>
-  )
-  
-  const vehicleIcon = L.divIcon({
-    html: carHtml,
-    className: 'vehicle-marker',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  })
+  // Memoize route key for polyline re-rendering
+  const routeKey = useMemo(() => `${currentIndex}-${route.length}`, [currentIndex, route.length])
 
   return (
     <MapContainer
-      center={
-        currentPos ?? [route[0]?.latitude || 0, route[0]?.longitude || 0]
-      }
-      zoom={15}
+      center={mapCenter}
+      zoom={MAP_CONFIG.ZOOM}
       scrollWheelZoom={true}
       className="h-full w-full"
       style={{ 
@@ -68,37 +94,36 @@ const MapView = ({ route, currentIndex }: Props) => {
       }}
     >
       <TileLayer 
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url={TILE_LAYER_CONFIG.URL}
+        attribution={TILE_LAYER_CONFIG.ATTRIBUTION}
       />
       
       {/* Route polyline */}
-      {route.length > 0 && (
+      {showRoute && polylinePositions.length > 0 && (
         <Polyline
           ref={polylineRef}
-          positions={route
-            .slice(0, currentIndex + 1)
-            .map((pt) => [pt.latitude, pt.longitude] as LatLngExpression)}
-          color="#3b82f6"
-          weight={4}
-          opacity={0.8}
-          smoothFactor={1}
+          key={routeKey}
+          positions={polylinePositions}
+          color={MAP_CONFIG.POLYLINE_COLOR}
+          weight={MAP_CONFIG.POLYLINE_WEIGHT}
+          opacity={MAP_CONFIG.POLYLINE_OPACITY}
+          smoothFactor={MAP_CONFIG.POLYLINE_SMOOTH_FACTOR}
         />
       )}
       
       {/* Vehicle marker */}
-      {currentPos && (
+      {showVehicle && currentPos && (
         <Marker 
           ref={markerRef}
-          key={currentIndex} 
+          key={`vehicle-${currentIndex}`}
           position={currentPos} 
           icon={vehicleIcon}
-          zIndexOffset={1000}
+          zIndexOffset={MAP_CONFIG.VEHICLE_Z_INDEX}
         />
       )}
       
-      <CenterUpdater />
-      <MarkerUpdater />
+      <MapCenterUpdater center={currentPos} enabled={centerOnVehicle} />
+      <MarkerUpdater markerRef={markerRef} position={currentPos} />
     </MapContainer>
   )
 }

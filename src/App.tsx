@@ -1,121 +1,85 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useCallback } from 'react'
 import MapView from './components/MapView'
 import Controls from './components/Controls'
-import type { RoutePoint, VehicleMetadata } from './types'
-import { calculateVehicleMetadata } from './utils/calculations'
-import { getRouteCoordinates, getMultiPointRoute } from './utils/roadApi'
+import { 
+  useRouteManagement, 
+  useSimulationTimer, 
+  useVehicleMetadata, 
+  useRouteLoader 
+} from './hooks'
 
-const App = () => {
-  const [points, setPoints] = useState<RoutePoint[]>([])
-  const [currentIdx, setCurrentIdx] = useState<number>(0)
-  const [playing, setPlaying] = useState<boolean>(false)
-  const [loading, setLoading] = useState<boolean>(true)
-  const [metadata, setMetadata] = useState<VehicleMetadata>({
-    currentSpeed: 0,
-    elapsedTime: 0,
-    distanceTraveled: 0,
-    totalDistance: 0,
-    progress: 0,
-  })
-  const timerRef = useRef<number | undefined>(undefined)
+const App: React.FC = () => {
+  const {
+    points,
+    currentIdx,
+    playing,
+    loading,
+    error,
+    setPoints,
+    setLoading,
+    setError,
+    resetRoute,
+    setPlaying,
+    setCurrentIdx,
+  } = useRouteManagement()
 
+  const { loadRoute, loadMultiPointRoute } = useRouteLoader(setPoints, setLoading, setError)
+  const metadata = useVehicleMetadata(points, currentIdx)
+  useSimulationTimer(playing, currentIdx, points.length, setCurrentIdx)
+
+  // Load initial route
   useEffect(() => {
-    // Load route from road API
     loadRoute()
-  }, [])
+  }, [loadRoute])
 
-  const loadRoute = async () => {
-    setLoading(true)
-    try {
-      // Example route in Nagpur
-      const startPoint: [number, number] = [79.0882, 21.1458] // [lng, lat]
-      const endPoint: [number, number] = [79.0982, 21.1558] // [lng, lat]
-      
-      const route = await getRouteCoordinates(startPoint, endPoint, 'driving-car')
-      setPoints(route)
-    } catch (error) {
-      console.error('Failed to load route:', error)
-      // Fallback to a simple route
-      setPoints(generateSimpleRoute())
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Event handlers
+  const handlePlayPause = useCallback(() => {
+    setPlaying(!playing)
+  }, [playing, setPlaying])
 
-  const generateSimpleRoute = (): RoutePoint[] => {
-    const points: RoutePoint[] = []
-    const baseLat = 21.1458 // Nagpur latitude
-    const baseLng = 79.0882 // Nagpur longitude
-    
-    for (let i = 0; i <= 20; i++) {
-      const timestamp = new Date(Date.now() + (i * 3000)).toISOString()
-      points.push({
-        latitude: baseLat + (i * 0.0001),
-        longitude: baseLng + (i * 0.0001),
-        timestamp
-      })
-    }
-    
-    return points
-  }
+  const handleReset = useCallback(() => {
+    resetRoute()
+  }, [resetRoute])
 
-  const loadMultiPointRoute = async () => {
-    setLoading(true)
-    try {
-      // Multi-point route example in Nagpur
-      const waypoints: [number, number][] = [
-        [79.0882, 21.1458], // Start - Nagpur center
-        [79.0922, 21.1498], // Waypoint 1
-        [79.0962, 21.1538], // Waypoint 2
-        [79.0982, 21.1558], // End
-      ]
-      
-      const route = await getMultiPointRoute(waypoints, 'driving-car')
-      setPoints(route)
-      setCurrentIdx(0)
-      setPlaying(false)
-    } catch (error) {
-      console.error('Failed to load multi-point route:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const handleLoadRoute = useCallback(() => {
+    loadRoute()
+    resetRoute()
+  }, [loadRoute, resetRoute])
 
-  useEffect(() => {
-    // Update metadata when current index changes
-    if (points.length > 0) {
-      const newMetadata = calculateVehicleMetadata(points, currentIdx)
-      setMetadata(newMetadata)
-    }
-  }, [points, currentIdx])
+  const handleLoadMultiPointRoute = useCallback(() => {
+    loadMultiPointRoute()
+    resetRoute()
+  }, [loadMultiPointRoute, resetRoute])
 
-  useEffect(() => {
-    // Play/pause logic with smooth timing
-    if (playing && currentIdx < points.length - 1) {
-      timerRef.current = window.setTimeout(() => {
-        setCurrentIdx((i) => i + 1)
-      }, 1000) // Update every second for smooth movement
-    }
-    return () => {
-      if (timerRef.current) window.clearTimeout(timerRef.current)
-    }
-  }, [playing, currentIdx, points.length])
-
-  const handlePlayPause = () => {
-    setPlaying((p) => !p)
-  }
-
-  const handleReset = () => {
-    setPlaying(false)
-    setCurrentIdx(0)
-  }
-
+  // Loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">Loading route from road API...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={handleLoadRoute}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
         </div>
       </div>
     )
@@ -124,28 +88,40 @@ const App = () => {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">LocoMotion</h1>
-            <p className="text-sm text-gray-600">Real-time Vehicle Tracking Simulation</p>
+      <header className="bg-white shadow-sm border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          {/* Title Section */}
+          <div className="flex-shrink-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">LocoMotion</h1>
+            <p className="text-xs sm:text-sm text-gray-600">Real-time Vehicle Tracking Simulation</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-sm text-gray-500">Vehicle ID: VH-001</div>
-              <div className="text-sm text-gray-500">Status: {playing ? 'Moving' : 'Stopped'}</div>
+          
+          {/* Status and Controls Section */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            {/* Vehicle Status */}
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div className="text-left sm:text-right">
+                <div className="text-xs sm:text-sm text-gray-500">Vehicle ID: VH-001</div>
+                <div className="text-xs sm:text-sm text-gray-500">
+                  Status: 
+                  <span className={`ml-1 font-medium ${playing ? 'text-green-600' : 'text-red-600'}`}>
+                    {playing ? 'Moving' : 'Stopped'}
+                  </span>
+                </div>
+              </div>
             </div>
+            
             {/* Route Options */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={loadRoute}
-                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                onClick={handleLoadRoute}
+                className="px-2 sm:px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 cursor-pointer transition-colors duration-200"
               >
                 Simple Route
               </button>
               <button
-                onClick={loadMultiPointRoute}
-                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                onClick={handleLoadMultiPointRoute}
+                className="px-2 sm:px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 cursor-pointer transition-colors duration-200"
               >
                 Multi-Point Route
               </button>
@@ -159,6 +135,9 @@ const App = () => {
         <MapView
           route={points}
           currentIndex={currentIdx}
+          centerOnVehicle={true}
+          showRoute={true}
+          showVehicle={true}
         />
       </div>
 
@@ -169,6 +148,9 @@ const App = () => {
         onReset={handleReset}
         currentPoint={points[currentIdx]}
         metadata={metadata}
+        showProgressBar={true}
+        showMetadata={true}
+        showCurrentTime={true}
       />
     </div>
   )
