@@ -2,6 +2,12 @@
 
 A modern, optimized, and production-ready web application that simulates real-time vehicle movement along predefined routes using React, TypeScript, and Leaflet maps. Built with industry best practices, performance optimizations, and comprehensive error handling.
 
+## 🌐 Live Demo
+
+**[🚀 Try LocoMotion Live](https://loco-motion-sand.vercel.app/)**
+
+Experience the real-time vehicle tracking simulation with interactive controls, responsive design, and smooth animations.
+
 ## 🚀 Features
 
 ### Core Functionality
