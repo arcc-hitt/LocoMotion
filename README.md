@@ -119,7 +119,7 @@ src/
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/arcc-hitt/LocoMotion
 cd LocoMotion
 ```
 
@@ -239,9 +239,9 @@ The application is built with testability in mind:
 5. Ensure all components are memoized and optimized
 6. Submit a pull request
 
-## 📄 License
+<!-- ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License. -->
 
 ## 🎉 Acknowledgments
 
